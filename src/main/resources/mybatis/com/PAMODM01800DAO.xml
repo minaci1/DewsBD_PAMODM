@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+   PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+   "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.douzone.comet.service.hr.pamodm.dao.PAMODM01800_DAO">
+
+<select id="selectList_staff_list" parameterType="HashMap"
+		resultType="com.douzone.comet.service.hr.pamodm.models.PAMODM01800_MODEL">		
+
+  WITH DistinctHuan AS (
+					    SELECT DISTINCT
+					        HUAN.EMP_NO EMP_NO,
+					        HUAN.COMPANY_CD COMPANY_CD,
+					        HUAN.OGRP_CD OGRP_CD,
+					        HUAN.PSTN_CD PSTN_CD,
+					        HUAN.DEPT_CD DEPT_CD,
+					        HUAN.GNFD_DT GNFD_DT
+							    FROM HR_HUAN_DTL HUAN
+							    	INNER JOIN HR_STRK_INFO_X10005 STRK 
+							    	ON (HUAN.EMP_NO = STRK.EMP_NO)
+							    WHERE STRK.START_DT > HUAN.GNFD_DT
+					 )
+SELECT DISTINCT 
+    HRI.COMPANY_CD ,-- 사업장
+    HRI.EMP_NO ,--사원번호
+    HEM.KOR_NM ,--성명
+    DH.DEPT_CD , --소속
+    DH.OGRP_CD , --직군
+    DH.PSTN_CD , --직급
+    HEM.JNCO_DT , --입사일
+    LP.MNG_DC ,--승격일
+    EP.MNG_DC ,--퇴직예정일
+    HRI.START_DT ,--시작일
+    HRI.END_DT , --종료일
+    TM.TM_CD_NM , --시간코드
+    HRI.DOF_TP , --휴무유형
+    HRI.START_TM, --시작시간
+    HRI.END_TM, --종료시간
+    ROUND(HRI.DOF_TM_CNT,0), --휴무시간
+    ROUND(HRI.LVE_TM_CNT,0) -- 이탈시간
+FROM HR_STRK_INFO_X10005 HRI
+	LEFT OUTER JOIN DistinctHuan DH 
+		ON (HRI.EMP_NO = DH.EMP_NO AND HRI.COMPANY_CD = DH.COMPANY_CD)
+	LEFT OUTER JOIN HR_EMP_MST HEM 
+		ON (HRI.EMP_NO = HEM.EMP_NO AND HRI.COMPANY_CD = HEM.COMPANY_CD)
+	LEFT OUTER JOIN HR_EMP_SDTL HES 
+		ON (HRI.EMP_NO = HES.EMP_NO AND HRI.COMPANY_CD = HES.COMPANY_CD)
+	LEFT OUTER JOIN (
+    					SELECT MNG_DC,
+    						   COMPANY_CD,
+    						   EMP_NO 
+    						 FROM HR_EMP_SDTL 
+    					WHERE (MCLS_CD = 'EWP93') AND (MNG_DC IS NOT NULL)
+    				) LP
+    	ON (HRI.COMPANY_CD = LP.COMPANY_CD AND HRI.EMP_NO = LP.EMP_NO)
+	LEFT OUTER JOIN (
+    					SELECT MNG_DC,
+    						   COMPANY_CD,
+    						   EMP_NO 
+    						FROM HR_EMP_SDTL
+    				    WHERE (MCLS_CD = 'EWP50') AND (MNG_DC IS NOT NULL)
+					) EP 
+		ON (HRI.COMPANY_CD = EP.COMPANY_CD AND HRI.EMP_NO = EP.EMP_NO)
+	LEFT OUTER JOIN (
+    					SELECT A.COMPANY_CD AS COMPANY_CD,
+					           B.EMP_NO AS EMP_NO,
+        					   A.TM_CD_NM AS TM_CD_NM,
+					           B.TM_CD AS TM_CD
+					    	FROM HR_OFFTIME_MST A 
+    							INNER JOIN (
+										        SELECT OFF.TM_CD AS TM_CD,
+										               OFF.COMPANY_CD,
+										               OFF.EMP_NO
+											        FROM HR_STRK_INFO_X10005 HRI
+												        LEFT OUTER JOIN HR_OFFDAILY_MST OFF
+													        ON (HRI.EMP_NO = OFF.EMP_NO AND HRI.START_DT = OFF.BWRK_DT AND HRI.COMPANY_CD = OFF.COMPANY_CD)
+										    ) B 
+								   ON (A.WORKTM_CD = B.TM_CD)
+					) TM
+		ON (HRI.COMPANY_CD = TM.COMPANY_CD AND HRI.EMP_NO = TM.EMP_NO)
+		WHERE 1=1
+		
+		<if test='COMPANY_CD !=null and COMPANY_CD !=""'>
+			AND HRI.COMPANY_CD = #{company_cd}
+		</if>
+		<if test='DEPT_CD !=null and DEPT_CD !=""'>
+			AND DH.DEPT_CD = #{dept_cd}
+		</if>
+		<if test='START_DT !=null and START_DT !=""'>
+			AND (HRI.START_DT = #{start_dt}
+		</if>
+		<if test='END_DT !=null and END_DT !=""'>
+			AND HRI.END_DT = #{end_dt})
+		</if>
+		<if test='DOF_TP !=null and DOF_TP !=""'>
+			AND HRI.DOF_TP = #{dof_tp}
+		</if>
+		 
+	</select>
+	
+	<select id="selectPK"
+		parameterType="com.douzone.comet.service.hr.pamodm.models.PAMODM01800_MODEL"
+		resultType="Integer">
+		
+		SELECT COUNT(*)
+			FROM HR_STRK_INFO_X10005
+		WHERE
+		COMPANY_CD = #{company_cd}
+		  AND EMP_NO = #{emp_no}
+		  AND START_DT = #{start_dt}
+		  AND END_DT  = #{end_dt}
+		  AND DOF_TP = #{dof_tp}
+		  AND INSERT_ID =#{insert_id}
+		  
+	</select>
+	
+	<select id="selectCompanyCd"
+		parameterType="com.douzone.comet.service.hr.pamodm.models.PAMODM01800_MODEL"
+		resultType="String">
+		
+		SELECT DISTINCT COMPANY_CD 
+			FROM HR_STRK_INFO_X10005 
+		WHERE EMP_NO = #{emp_no}
+	
+	</select>
+	
+	<insert id="insertBatch"
+		parameterType="com.douzone.comet.service.hr.pamodm.models.PAMODM01800_MODEL">
+		INSERT INTO HR_STRK_INFO_X10005
+		(
+		COMPANY_CD, EMP_NO,
+		START_DT,END_DT,
+		DOF_TP,INSERT_ID, INSERT_DTS, INSERT_IP
+		)
+		VALUES
+		(
+		#{company_cd}, #{emp_no},
+		#{start_dt}, #{end_dt}, #{dof_tp},#{insert_id}, #{insert_dts}, #{insert_ip}  
+		)
+	</insert>
+	
+	<delete id="deleteBatch"
+		parameterType="com.douzone.comet.service.hr.pamodm.models.PAMODM01800_MODEL">
+		DELETE FROM HR_STRK_INFO_X10005
+		
+		WHERE COMPANY_CD = #{company_cd}
+		  AND EMP_NO = #{emp_no}
+		  AND START_DT = #{start_dt}
+		  AND END_DT = #{end_dt}
+	</delete>
+	
+<update id="updateBatch" parameterType="com.douzone.comet.service.hr.pamodm.models.PAMODM01800_MODEL">
+  	UPDATE HR_STRK_INFO_X10005
+	  <set>
+	    <if test="dof_tp != null and dof_tp != ''">
+	      DOF_TP = #{dof_tp},
+	    </if>
+	    <if test="start_tm != null and start_tm != ''">
+	      START_TM = REPLACE(#{start_tm}, ':', ''),
+	    </if>
+	    <if test="end_tm != null and end_tm  != ''">
+	     END_TM = REPLACE(#{end_tm}, ':', ''),
+	    </if>
+	    <if test="update_id != null and update_id != ''">
+	      UPDATE_ID = #{update_id},
+	    </if>
+	    <if test="update_ip != null and update_ip != ''">
+	      update_ip = #{update_ip},
+	    </if>
+	    <if test="lve_tm_cnt != null">
+	      Lve_tm_cnt = #{lve_tm_cnt}
+	    </if>
+	  </set>
+  	WHERE COMPANY_CD = #{company_cd} 
+  	AND EMP_NO = #{emp_no} 
+  	AND START_DT =#{start_dt} 
+  	AND END_DT =#{end_dt}
+</update>
+	 
+
+</mapper>
+
+
